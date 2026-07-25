@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "SRT Player (Independent Timer)",
+  "version": "0.1.0",
+  "description": "Step 1: Load and parse an SRT file, verify output before building the overlay/timer UI.",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "permissions": []
+}

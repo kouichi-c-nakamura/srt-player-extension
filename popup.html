@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<title>SRT Player - Step 1</title>
+<style>
+  body {
+    font-family: system-ui, sans-serif;
+    width: 420px;
+    padding: 12px;
+    font-size: 13px;
+  }
+  h1 {
+    font-size: 14px;
+    margin: 0 0 8px;
+  }
+  #status {
+    margin: 8px 0;
+    padding: 6px 8px;
+    border-radius: 4px;
+    background: #f0f0f0;
+  }
+  #status.error {
+    background: #fdd;
+    color: #900;
+  }
+  #status.ok {
+    background: #dfd;
+    color: #060;
+  }
+  #cueList {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+  .cue {
+    padding: 6px 8px;
+    border-bottom: 1px solid #eee;
+  }
+  .cue:last-child {
+    border-bottom: none;
+  }
+  .cue .meta {
+    color: #888;
+    font-size: 11px;
+  }
+  .cue .text {
+    white-space: pre-wrap;
+  }
+</style>
+</head>
+<body>
+  <h1>SRT Player &mdash; Step 1: File select + parse check</h1>
+  <input type="file" id="fileInput" accept=".srt,text/plain" />
+  <div id="status">No file loaded yet.</div>
+  <div id="cueList"></div>
+
+  <script src="srt-parser.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
