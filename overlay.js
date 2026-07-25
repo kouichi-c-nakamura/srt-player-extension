@@ -178,6 +178,25 @@
         <button type="button" class="ctrl-btn" data-action="toggle-list" data-role="toggle-list-btn">近くの行を表示</button>
       </div>
       <div class="line-list" data-role="line-list" style="display: none;"></div>
+      <div class="panel-row">
+        <button type="button" class="ctrl-btn" data-action="toggle-settings" data-role="toggle-settings-btn">字幕の見た目設定</button>
+      </div>
+      <div class="panel-row settings-row" data-role="settings-row" style="display: none;">
+        <span class="settings-label">色</span>
+        <input type="color" data-role="color-input" value="#ffffff" />
+        <span class="settings-label">サイズ</span>
+        <input type="range" data-role="size-input" min="16" max="120" step="1" value="28" />
+      </div>
+      <div class="panel-row settings-row" data-role="font-row" style="display: none;">
+        <span class="settings-label">フォント</span>
+        <select data-role="font-select">
+          <option value='"Hiragino Sans", "Noto Sans JP", system-ui, sans-serif'>ゴシック体(デフォルト)</option>
+          <option value='"Hiragino Mincho ProN", "Noto Serif JP", serif'>明朝体</option>
+          <option value='"Yu Gothic", "Meiryo", sans-serif'>游ゴシック / メイリオ</option>
+          <option value='Georgia, "Times New Roman", serif'>Georgia(欧文セリフ)</option>
+          <option value='"Courier New", monospace'>等幅体</option>
+        </select>
+      </div>
     </div>
   `;
   document.documentElement.appendChild(panelEl);
@@ -194,6 +213,12 @@
   const cueStatusEl = panelEl.querySelector('[data-role="cue-status"]');
   const toggleListBtnEl = panelEl.querySelector('[data-role="toggle-list-btn"]');
   const lineListEl = panelEl.querySelector('[data-role="line-list"]');
+  const toggleSettingsBtnEl = panelEl.querySelector('[data-role="toggle-settings-btn"]');
+  const settingsRowEl = panelEl.querySelector('[data-role="settings-row"]');
+  const fontRowEl = panelEl.querySelector('[data-role="font-row"]');
+  const colorInputEl = panelEl.querySelector('[data-role="color-input"]');
+  const sizeInputEl = panelEl.querySelector('[data-role="size-input"]');
+  const fontSelectEl = panelEl.querySelector('[data-role="font-select"]');
 
   // ---------------------------------------------------------------
   // Wiring
@@ -242,7 +267,30 @@
         lastRenderedAnchorIdx = null; // force a fresh render on open
         renderLineList();
         break;
+
+      case "toggle-settings": {
+        const isHidden = settingsRowEl.style.display === "none";
+        settingsRowEl.style.display = isHidden ? "flex" : "none";
+        fontRowEl.style.display = isHidden ? "flex" : "none";
+        toggleSettingsBtnEl.textContent = isHidden ? "見た目設定を隠す" : "字幕の見た目設定";
+        break;
+      }
     }
+  });
+
+  // Live-apply appearance settings via CSS custom properties on the
+  // overlay element. "input" (not "change") so it updates as the
+  // user drags/picks, not just on blur/commit.
+  colorInputEl.addEventListener("input", () => {
+    overlayEl.style.setProperty("--srt-caption-color", colorInputEl.value);
+  });
+
+  sizeInputEl.addEventListener("input", () => {
+    overlayEl.style.setProperty("--srt-caption-size", `${sizeInputEl.value}px`);
+  });
+
+  fontSelectEl.addEventListener("change", () => {
+    overlayEl.style.setProperty("--srt-caption-font", fontSelectEl.value);
   });
 
   // Delegated click handler for the nearby-lines list: clicking any
