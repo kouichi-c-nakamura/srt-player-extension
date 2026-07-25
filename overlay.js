@@ -12,10 +12,71 @@
 // offset/jump buttons. This trades "true sync" for "works identically
 // on every platform, forever" - Netflix, Amazon, YouTube, whatever.
 //
-// (parseSrt / timecodeToMs are loaded from srt-parser.js, which runs
-// before this file per manifest.json's content_scripts order.)
+// (parseSrt/timecodeToMs come from srt-parser.js; SRT_PLAYER_DEFAULT_WHITELIST
+// and srtPlayerHostMatches come from config.js. Both run before this
+// file per manifest.json's content_scripts order.)
 
-(function () {
+(async function () {
+  // ---------------------------------------------------------------
+  // Cross-browser storage (Chrome: chrome.storage.local with promise
+  // support in modern versions; Firefox: browser.storage.local,
+  // natively promise-based). Feature-detected so this file runs
+  // unmodified on either browser. Defined FIRST since the whitelist
+  // gate below needs it before anything else happens.
+  // ---------------------------------------------------------------
+
+  const storageArea =
+    typeof browser !== "undefined" && browser.storage
+      ? browser.storage.local
+      : typeof chrome !== "undefined" && chrome.storage
+      ? chrome.storage.local
+      : null;
+
+  async function storageGet(key) {
+    if (!storageArea) return undefined;
+    try {
+      const result = await storageArea.get(key);
+      return result ? result[key] : undefined;
+    } catch (err) {
+      console.error("[SRT Player] storage.get failed:", err);
+      return undefined;
+    }
+  }
+
+  async function storageSet(key, value) {
+    if (!storageArea) return;
+    try {
+      await storageArea.set({ [key]: value });
+    } catch (err) {
+      console.error("[SRT Player] storage.set failed:", err);
+    }
+  }
+
+  function debounce(fn, waitMs) {
+    let timer = null;
+    return (...args) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), waitMs);
+    };
+  }
+
+  // ---------------------------------------------------------------
+  // Whitelist gate: do nothing at all on this page unless its
+  // hostname is on the allowed list (or "enable everywhere" is on).
+  // This keeps the extension's core simplicity (no per-site code)
+  // while letting the user opt it out of sites where it'd just be
+  // clutter (e.g. YouTube, where it's rarely needed).
+  // ---------------------------------------------------------------
+
+  const enableAllSites = (await storageGet("srtPlayerEnableAllSites")) === true;
+  const whitelist = (await storageGet("srtPlayerWhitelist")) || SRT_PLAYER_DEFAULT_WHITELIST;
+  const hostname = location.hostname;
+  const isAllowedHere = enableAllSites || whitelist.some((d) => srtPlayerHostMatches(hostname, d));
+
+  if (!isAllowedHere) {
+    return; // silently do nothing on this site
+  }
+
   // ---------------------------------------------------------------
   // State
   // ---------------------------------------------------------------
@@ -38,6 +99,12 @@
     return elapsedBaseMs;
   }
 
+  // Saves the *live* elapsed time (not just the last checkpoint), so
+  // it's correct whether called while paused or while playing.
+  function persistElapsed() {
+    storageSet("srtPlayerElapsedMs", getElapsedMs());
+  }
+
   function setElapsedMs(newElapsed) {
     elapsedBaseMs = Math.max(0, newElapsed);
     if (isPlaying) {
@@ -58,6 +125,14 @@
     isPlaying = false;
     persistElapsed();
   }
+
+  // Safety net: if the user closes the tab mid-playback without ever
+  // pressing pause, setElapsedMs()/pause() won't have fired recently
+  // to save progress. Autosave periodically while playing so an
+  // interruption loses at most a couple of seconds of position.
+  setInterval(() => {
+    if (isPlaying) persistElapsed();
+  }, 2000);
 
   function adjustElapsed(deltaMs) {
     setElapsedMs(getElapsedMs() + deltaMs);
@@ -131,62 +206,8 @@
   }
 
   // ---------------------------------------------------------------
-  // Cross-browser storage (Chrome: chrome.storage.local with promise
-  // support in modern versions; Firefox: browser.storage.local,
-  // natively promise-based). Feature-detected so this file runs
-  // unmodified on either browser.
+  // Subtitle overlay (text display)
   // ---------------------------------------------------------------
-
-  const storageArea =
-    typeof browser !== "undefined" && browser.storage
-      ? browser.storage.local
-      : typeof chrome !== "undefined" && chrome.storage
-      ? chrome.storage.local
-      : null;
-
-  async function storageGet(key) {
-    if (!storageArea) return undefined;
-    try {
-      const result = await storageArea.get(key);
-      return result ? result[key] : undefined;
-    } catch (err) {
-      console.error("[SRT Player] storage.get failed:", err);
-      return undefined;
-    }
-  }
-
-  async function storageSet(key, value) {
-    if (!storageArea) return;
-    try {
-      await storageArea.set({ [key]: value });
-    } catch (err) {
-      console.error("[SRT Player] storage.set failed:", err);
-    }
-  }
-
-  function debounce(fn, waitMs) {
-    let timer = null;
-    return (...args) => {
-      clearTimeout(timer);
-      timer = setTimeout(() => fn(...args), waitMs);
-    };
-  }
-
-  // Saves the *live* elapsed time (not just the last checkpoint), so
-  // it's correct whether called while paused or while playing.
-  function persistElapsed() {
-    storageSet("srtPlayerElapsedMs", getElapsedMs());
-  }
-
-  // Safety net: if the user closes the tab mid-playback without ever
-  // pressing pause, setElapsedMs()/pause() won't have fired recently
-  // to save progress. Autosave periodically while playing so an
-  // interruption loses at most a couple of seconds of position.
-  setInterval(() => {
-    if (isPlaying) persistElapsed();
-  }, 2000);
-
-
 
   const overlayEl = document.createElement("div");
   overlayEl.id = "srt-player-overlay";
@@ -204,13 +225,20 @@
   // ---------------------------------------------------------------
   // Control panel (UI)
   // ---------------------------------------------------------------
+  // Header icons (☰ nearby-lines, 🎨 appearance, ▾ collapse) toggle
+  // sections in the body. Icons keep the header compact instead of
+  // spending a full row on each toggle.
 
   const panelEl = document.createElement("div");
   panelEl.id = "srt-player-panel";
   panelEl.innerHTML = `
     <div class="panel-header">
       <span>SRT Player</span>
-      <button type="button" data-action="toggle-collapse" title="最小化/展開">▾</button>
+      <div class="header-icons">
+        <button type="button" class="icon-btn" data-action="toggle-list" data-role="toggle-list-btn" title="近くの行を表示">☰</button>
+        <button type="button" class="icon-btn" data-action="toggle-settings" data-role="toggle-settings-btn" title="字幕の見た目設定">🎨</button>
+        <button type="button" class="icon-btn" data-action="toggle-collapse" title="最小化/展開">▾</button>
+      </div>
     </div>
     <div class="panel-body">
       <div class="panel-row">
@@ -230,13 +258,7 @@
         <button type="button" class="ctrl-btn" data-action="next-cue" title="次の字幕へ">▶▶</button>
       </div>
       <div class="status-line" data-role="cue-status">字幕ファイル未読み込み</div>
-      <div class="panel-row">
-        <button type="button" class="ctrl-btn" data-action="toggle-list" data-role="toggle-list-btn">近くの行を表示</button>
-      </div>
       <div class="line-list" data-role="line-list" style="display: none;"></div>
-      <div class="panel-row">
-        <button type="button" class="ctrl-btn" data-action="toggle-settings" data-role="toggle-settings-btn">字幕の見た目設定</button>
-      </div>
       <div class="panel-row settings-row" data-role="settings-row" style="display: none;">
         <span class="settings-label">色</span>
         <input type="color" data-role="color-input" value="#ffffff" />
@@ -319,7 +341,7 @@
       case "toggle-list":
         isListExpanded = !isListExpanded;
         lineListEl.style.display = isListExpanded ? "flex" : "none";
-        toggleListBtnEl.textContent = isListExpanded ? "行リストを隠す" : "近くの行を表示";
+        toggleListBtnEl.classList.toggle("active", isListExpanded);
         lastRenderedAnchorIdx = null; // force a fresh render on open
         renderLineList();
         break;
@@ -328,7 +350,7 @@
         const isHidden = settingsRowEl.style.display === "none";
         settingsRowEl.style.display = isHidden ? "flex" : "none";
         fontRowEl.style.display = isHidden ? "flex" : "none";
-        toggleSettingsBtnEl.textContent = isHidden ? "見た目設定を隠す" : "字幕の見た目設定";
+        toggleSettingsBtnEl.classList.toggle("active", isHidden);
         break;
       }
     }
@@ -512,12 +534,26 @@
   // Render loop
   // ---------------------------------------------------------------
 
+  // If left playing well past the last subtitle line (e.g. the user
+  // forgot to stop it), auto-pause rather than let the timer run
+  // forever in the background.
+  const AUTO_STOP_AFTER_LAST_CUE_MS = 60 * 1000; // 1 minute
+
   function renderLoop() {
     const t = getElapsedMs();
     elapsedLabelEl.textContent = formatMs(t);
 
     const cue = findCueAt(t);
     overlayEl.textContent = cue ? cue.text : "";
+
+    if (isPlaying && subtitles.length > 0) {
+      const lastCueEnd = subtitles[subtitles.length - 1].end;
+      if (t > lastCueEnd + AUTO_STOP_AFTER_LAST_CUE_MS) {
+        pause();
+        updatePlayPauseLabel();
+        cueStatusEl.textContent = "最後の字幕から1分経過したため、自動的に一時停止しました。";
+      }
+    }
 
     renderLineList();
 

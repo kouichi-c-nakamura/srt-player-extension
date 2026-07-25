@@ -1,88 +1,133 @@
-// Step 1 goal: prove the file selector + SRT parser work reliably,
-// with clear on-screen feedback (not just console.log) so failures
-// are obvious without opening devtools.
+// Whitelist settings screen. Unlike the on-page control panel, this
+// popup has no persistent state of its own - it only reads/writes
+// browser.storage.local, so it doesn't matter that the popup's JS
+// context is destroyed every time it closes.
 
-const fileInput = document.getElementById("fileInput");
-const statusEl = document.getElementById("status");
-const cueListEl = document.getElementById("cueList");
+const storageArea =
+  typeof browser !== "undefined" && browser.storage
+    ? browser.storage.local
+    : typeof chrome !== "undefined" && chrome.storage
+    ? chrome.storage.local
+    : null;
 
-function setStatus(message, kind) {
-  statusEl.textContent = message;
-  statusEl.className = kind || "";
+async function storageGet(key) {
+  if (!storageArea) return undefined;
+  const result = await storageArea.get(key);
+  return result ? result[key] : undefined;
 }
 
-function renderCues(cues) {
-  cueListEl.innerHTML = "";
-
-  if (cues.length === 0) {
-    cueListEl.textContent = "(no cues parsed)";
-    return;
-  }
-
-  const fragment = document.createDocumentFragment();
-
-  for (const cue of cues) {
-    const cueEl = document.createElement("div");
-    cueEl.className = "cue";
-
-    const metaEl = document.createElement("div");
-    metaEl.className = "meta";
-    metaEl.textContent = `#${cue.index}  ${formatMs(cue.start)} -> ${formatMs(cue.end)}`;
-
-    const textEl = document.createElement("div");
-    textEl.className = "text";
-    textEl.textContent = cue.text;
-
-    cueEl.appendChild(metaEl);
-    cueEl.appendChild(textEl);
-    fragment.appendChild(cueEl);
-  }
-
-  cueListEl.appendChild(fragment);
+async function storageSet(key, value) {
+  if (!storageArea) return;
+  await storageArea.set({ [key]: value });
 }
 
-function formatMs(ms) {
-  const h = Math.floor(ms / 3600000);
-  const m = Math.floor((ms % 3600000) / 60000);
-  const s = Math.floor((ms % 60000) / 1000);
-  const msRemainder = ms % 1000;
-  const pad = (n, len = 2) => String(n).padStart(len, "0");
-  return `${pad(h)}:${pad(m)}:${pad(s)},${pad(msRemainder, 3)}`;
-}
+const currentHostEl = document.querySelector('[data-role="current-host"]');
+const addCurrentBtnEl = document.querySelector('[data-role="add-current-btn"]');
+const allSitesCheckboxEl = document.querySelector('[data-role="all-sites-checkbox"]');
+const domainListEl = document.querySelector('[data-role="domain-list"]');
+const newDomainInputEl = document.querySelector('[data-role="new-domain-input"]');
+const addDomainBtnEl = document.querySelector('[data-role="add-domain-btn"]');
 
-fileInput.addEventListener("change", async (event) => {
-  const file = event.target.files[0];
+let whitelist = [];
+let currentHostname = null;
 
-  if (!file) {
-    setStatus("No file selected.");
-    return;
-  }
-
-  setStatus(`Reading "${file.name}"...`);
-
+async function getActiveTabHostname() {
+  const tabApi = typeof browser !== "undefined" ? browser.tabs : chrome.tabs;
   try {
-    // Explicit UTF-8 read; SRT files are sometimes Shift-JIS but we
-    // treat that as a known limitation to revisit later if it comes up.
-    const rawText = await file.text();
-
-    const cues = parseSrt(rawText);
-
-    if (cues.length === 0) {
-      setStatus(
-        `Parsed "${file.name}" but found 0 cues. File may be malformed or in an unexpected encoding.`,
-        "error"
-      );
-      console.warn("SRT parse produced 0 cues. Raw text preview:", rawText.slice(0, 300));
-      renderCues([]);
-      return;
-    }
-
-    setStatus(`Loaded "${file.name}": ${cues.length} cues parsed successfully.`, "ok");
-    console.log(`Parsed ${cues.length} cues from ${file.name}:`, cues);
-
-    renderCues(cues);
+    const tabs = await tabApi.query({ active: true, currentWindow: true });
+    const url = tabs && tabs[0] && tabs[0].url;
+    if (!url) return null;
+    return new URL(url).hostname;
   } catch (err) {
-    setStatus(`Failed to read/parse "${file.name}": ${err.message}`, "error");
-    console.error("SRT parse error:", err);
+    console.error("[SRT Player] could not read active tab URL:", err);
+    return null;
+  }
+}
+
+function renderDomainList() {
+  domainListEl.innerHTML = "";
+
+  if (whitelist.length === 0) {
+    const empty = document.createElement("div");
+    empty.textContent = "(リストは空です)";
+    empty.style.color = "#888";
+    domainListEl.appendChild(empty);
+    return;
+  }
+
+  for (const domain of whitelist) {
+    const row = document.createElement("div");
+    row.className = "domain-row";
+
+    const label = document.createElement("span");
+    label.textContent = domain;
+    row.appendChild(label);
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "small";
+    removeBtn.textContent = "削除";
+    removeBtn.addEventListener("click", () => removeDomain(domain));
+    row.appendChild(removeBtn);
+
+    domainListEl.appendChild(row);
+  }
+}
+
+function normalizeDomainInput(raw) {
+  let value = raw.trim().toLowerCase();
+  // Be forgiving of pasted URLs or "www." prefixes.
+  value = value.replace(/^https?:\/\//, "").replace(/^www\./, "");
+  value = value.split("/")[0];
+  return value;
+}
+
+async function addDomain(rawDomain) {
+  const domain = normalizeDomainInput(rawDomain);
+  if (!domain) return;
+  if (whitelist.includes(domain)) return;
+
+  whitelist.push(domain);
+  whitelist.sort();
+  await storageSet("srtPlayerWhitelist", whitelist);
+  renderDomainList();
+}
+
+async function removeDomain(domain) {
+  whitelist = whitelist.filter((d) => d !== domain);
+  await storageSet("srtPlayerWhitelist", whitelist);
+  renderDomainList();
+}
+
+addDomainBtnEl.addEventListener("click", () => {
+  addDomain(newDomainInputEl.value);
+  newDomainInputEl.value = "";
+});
+
+newDomainInputEl.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    addDomain(newDomainInputEl.value);
+    newDomainInputEl.value = "";
   }
 });
+
+addCurrentBtnEl.addEventListener("click", () => {
+  if (currentHostname) addDomain(currentHostname);
+});
+
+allSitesCheckboxEl.addEventListener("change", () => {
+  storageSet("srtPlayerEnableAllSites", allSitesCheckboxEl.checked);
+});
+
+async function init() {
+  whitelist = (await storageGet("srtPlayerWhitelist")) || SRT_PLAYER_DEFAULT_WHITELIST.slice();
+  allSitesCheckboxEl.checked = (await storageGet("srtPlayerEnableAllSites")) === true;
+
+  renderDomainList();
+
+  currentHostname = await getActiveTabHostname();
+  currentHostEl.textContent = currentHostname || "(このページのURLを取得できません)";
+  addCurrentBtnEl.disabled = !currentHostname;
+}
+
+init();
