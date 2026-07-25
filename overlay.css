@@ -1,0 +1,32 @@
+/* Step 2: static overlay styling check.
+   No timer logic here yet - just proving the overlay renders
+   correctly on top of arbitrary pages/videos. */
+
+#srt-player-overlay {
+  position: fixed;
+  left: 50%;
+  bottom: 6%;
+  transform: translateX(-50%);
+  max-width: 80vw;
+
+  z-index: 2147483647; /* max safe z-index, to beat most site UI */
+  pointer-events: none; /* never intercept clicks on the page/video */
+
+  color: #ffffff;
+  font-family: "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  font-size: 28px;
+  line-height: 1.4;
+  font-weight: 600;
+  text-align: center;
+  white-space: pre-wrap;
+
+  /* Classic subtitle outline: text-shadow stacked in multiple
+     directions instead of -webkit-text-stroke, for better
+     cross-browser rendering (Firefox support included). */
+  text-shadow:
+    -1px -1px 2px #000,
+     1px -1px 2px #000,
+    -1px  1px 2px #000,
+     1px  1px 2px #000,
+     0px  2px 3px #000;
+}
