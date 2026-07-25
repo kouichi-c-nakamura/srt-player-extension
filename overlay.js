@@ -22,6 +22,8 @@
 
   let subtitles = []; // sorted array of {index, start, end, text}
   let currentFileName = null;
+  let isListExpanded = false;
+  let lastRenderedAnchorIdx = null; // sentinel; forces a render the first time
 
   // Independent timer state. "elapsed" = current position on the
   // subtitle timeline, in milliseconds. This IS the only clock.
@@ -61,6 +63,26 @@
 
   function getCurrentCueIndex(timeMs) {
     return subtitles.findIndex((c) => timeMs >= c.start && timeMs <= c.end);
+  }
+
+  // Index used as the "center" (offset 0) row for the nearby-lines
+  // list, and as the pivot for previous-cue jumps while in a gap.
+  // If we're inside a cue, that cue is the anchor. If we're in a
+  // gap between cues, the anchor is the most recent cue that
+  // already started (so the list still makes sense mid-gap).
+  function getAnchorIndex(timeMs) {
+    const idx = getCurrentCueIndex(timeMs);
+    if (idx !== -1) return idx;
+
+    let lastIdx = -1;
+    for (let i = 0; i < subtitles.length; i++) {
+      if (subtitles[i].start < timeMs) {
+        lastIdx = i;
+      } else {
+        break;
+      }
+    }
+    return lastIdx; // -1 if before the very first cue
   }
 
   function jumpToNextCue() {
@@ -152,6 +174,10 @@
         <button type="button" class="ctrl-btn" data-action="next-cue" title="次の字幕へ">▶▶</button>
       </div>
       <div class="status-line" data-role="cue-status">字幕ファイル未読み込み</div>
+      <div class="panel-row">
+        <button type="button" class="ctrl-btn" data-action="toggle-list" data-role="toggle-list-btn">近くの行を表示</button>
+      </div>
+      <div class="line-list" data-role="line-list" style="display: none;"></div>
     </div>
   `;
   document.documentElement.appendChild(panelEl);
@@ -166,6 +192,8 @@
   const playPauseBtnEl = panelEl.querySelector('[data-role="play-pause-btn"]');
   const elapsedLabelEl = panelEl.querySelector('[data-role="elapsed"]');
   const cueStatusEl = panelEl.querySelector('[data-role="cue-status"]');
+  const toggleListBtnEl = panelEl.querySelector('[data-role="toggle-list-btn"]');
+  const lineListEl = panelEl.querySelector('[data-role="line-list"]');
 
   // ---------------------------------------------------------------
   // Wiring
@@ -206,7 +234,23 @@
       case "next-cue":
         jumpToNextCue();
         break;
+
+      case "toggle-list":
+        isListExpanded = !isListExpanded;
+        lineListEl.style.display = isListExpanded ? "flex" : "none";
+        toggleListBtnEl.textContent = isListExpanded ? "行リストを隠す" : "近くの行を表示";
+        lastRenderedAnchorIdx = null; // force a fresh render on open
+        renderLineList();
+        break;
     }
+  });
+
+  // Delegated click handler for the nearby-lines list: clicking any
+  // row with a data-start attribute jumps the internal timer there.
+  lineListEl.addEventListener("click", (event) => {
+    const row = event.target.closest(".line-row[data-start]");
+    if (!row) return;
+    setElapsedMs(parseFloat(row.dataset.start));
   });
 
   fileInputEl.addEventListener("change", async (event) => {
@@ -231,6 +275,7 @@
       // until next time you load a new file" - this IS that reset.
       elapsedBaseMs = 0;
       isPlaying = false;
+      lastRenderedAnchorIdx = null;
       updatePlayPauseLabel();
     } catch (err) {
       cueStatusEl.textContent = `読み込みエラー: ${err.message}`;
@@ -252,6 +297,57 @@
     return `${pad(h)}:${pad(m)}:${pad(s)},${pad(msRemainder, 3)}`;
   }
 
+  function renderLineList() {
+    if (!isListExpanded) return;
+
+    const t = getElapsedMs();
+    const anchorIdx = getAnchorIndex(t);
+
+    // Skip the rebuild entirely if we're still centered on the same
+    // cue as last time. Rebuilding on every animation frame (60/sec)
+    // was destroying and recreating the row elements constantly,
+    // which could swallow a click that started (mousedown) on a row
+    // that got replaced before mouseup/click fired.
+    if (anchorIdx === lastRenderedAnchorIdx) return;
+    lastRenderedAnchorIdx = anchorIdx;
+
+    lineListEl.innerHTML = "";
+
+    for (let offset = -3; offset <= 3; offset++) {
+      const idx = anchorIdx + offset;
+      const row = document.createElement("div");
+      row.className = "line-row" + (offset === 0 ? " current" : "");
+
+      const offsetLabelEl = document.createElement("span");
+      offsetLabelEl.className = "offset-label";
+      offsetLabelEl.textContent = offset === 0 ? "現在" : offset > 0 ? `+${offset}` : `${offset}`;
+      row.appendChild(offsetLabelEl);
+
+      if (idx >= 0 && idx < subtitles.length) {
+        const cue = subtitles[idx];
+        row.dataset.start = String(cue.start);
+
+        const timeEl = document.createElement("span");
+        timeEl.className = "line-time";
+        timeEl.textContent = formatMs(cue.start);
+        row.appendChild(timeEl);
+
+        const textEl = document.createElement("span");
+        textEl.className = "line-text";
+        textEl.textContent = cue.text.replace(/\n/g, " / ");
+        row.appendChild(textEl);
+      } else {
+        row.classList.add("empty");
+        const textEl = document.createElement("span");
+        textEl.className = "line-text";
+        textEl.textContent = "\u2014"; // em dash placeholder, out of range
+        row.appendChild(textEl);
+      }
+
+      lineListEl.appendChild(row);
+    }
+  }
+
   // ---------------------------------------------------------------
   // Render loop
   // ---------------------------------------------------------------
@@ -262,6 +358,8 @@
 
     const cue = findCueAt(t);
     overlayEl.textContent = cue ? cue.text : "";
+
+    renderLineList();
 
     requestAnimationFrame(renderLoop);
   }

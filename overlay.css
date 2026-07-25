@@ -96,6 +96,64 @@
   font-size: 11px;
 }
 
+#srt-player-panel .line-list {
+  border-top: 1px solid #444;
+  padding-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+#srt-player-panel .line-row {
+  display: flex;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+#srt-player-panel .line-row:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+#srt-player-panel .line-row.current {
+  background: rgba(255, 210, 80, 0.18);
+  font-weight: 600;
+}
+
+#srt-player-panel .line-row.empty {
+  color: #666;
+  cursor: default;
+}
+
+#srt-player-panel .line-row.empty:hover {
+  background: none;
+}
+
+#srt-player-panel .line-row .offset-label {
+  flex: 0 0 28px;
+  color: #999;
+  text-align: right;
+}
+
+#srt-player-panel .line-row.current .offset-label {
+  color: #ffd250;
+}
+
+#srt-player-panel .line-row .line-time {
+  flex: 0 0 82px;
+  color: #999;
+}
+
+#srt-player-panel .line-row .line-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 #srt-player-overlay {
   position: fixed;
   left: 50%;
