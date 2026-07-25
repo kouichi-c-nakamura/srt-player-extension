@@ -43,6 +43,7 @@
     if (isPlaying) {
       startPerfMs = performance.now();
     }
+    persistElapsed();
   }
 
   function play() {
@@ -55,6 +56,7 @@
     if (!isPlaying) return;
     elapsedBaseMs = getElapsedMs();
     isPlaying = false;
+    persistElapsed();
   }
 
   function adjustElapsed(deltaMs) {
@@ -129,8 +131,62 @@
   }
 
   // ---------------------------------------------------------------
-  // Subtitle overlay (text display)
+  // Cross-browser storage (Chrome: chrome.storage.local with promise
+  // support in modern versions; Firefox: browser.storage.local,
+  // natively promise-based). Feature-detected so this file runs
+  // unmodified on either browser.
   // ---------------------------------------------------------------
+
+  const storageArea =
+    typeof browser !== "undefined" && browser.storage
+      ? browser.storage.local
+      : typeof chrome !== "undefined" && chrome.storage
+      ? chrome.storage.local
+      : null;
+
+  async function storageGet(key) {
+    if (!storageArea) return undefined;
+    try {
+      const result = await storageArea.get(key);
+      return result ? result[key] : undefined;
+    } catch (err) {
+      console.error("[SRT Player] storage.get failed:", err);
+      return undefined;
+    }
+  }
+
+  async function storageSet(key, value) {
+    if (!storageArea) return;
+    try {
+      await storageArea.set({ [key]: value });
+    } catch (err) {
+      console.error("[SRT Player] storage.set failed:", err);
+    }
+  }
+
+  function debounce(fn, waitMs) {
+    let timer = null;
+    return (...args) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => fn(...args), waitMs);
+    };
+  }
+
+  // Saves the *live* elapsed time (not just the last checkpoint), so
+  // it's correct whether called while paused or while playing.
+  function persistElapsed() {
+    storageSet("srtPlayerElapsedMs", getElapsedMs());
+  }
+
+  // Safety net: if the user closes the tab mid-playback without ever
+  // pressing pause, setElapsedMs()/pause() won't have fired recently
+  // to save progress. Autosave periodically while playing so an
+  // interruption loses at most a couple of seconds of position.
+  setInterval(() => {
+    if (isPlaying) persistElapsed();
+  }, 2000);
+
+
 
   const overlayEl = document.createElement("div");
   overlayEl.id = "srt-player-overlay";
@@ -281,16 +337,27 @@
   // Live-apply appearance settings via CSS custom properties on the
   // overlay element. "input" (not "change") so it updates as the
   // user drags/picks, not just on blur/commit.
+  const persistAppearance = debounce(() => {
+    storageSet("srtPlayerAppearance", {
+      color: colorInputEl.value,
+      size: sizeInputEl.value,
+      font: fontSelectEl.value,
+    });
+  }, 300);
+
   colorInputEl.addEventListener("input", () => {
     overlayEl.style.setProperty("--srt-caption-color", colorInputEl.value);
+    persistAppearance();
   });
 
   sizeInputEl.addEventListener("input", () => {
     overlayEl.style.setProperty("--srt-caption-size", `${sizeInputEl.value}px`);
+    persistAppearance();
   });
 
   fontSelectEl.addEventListener("change", () => {
     overlayEl.style.setProperty("--srt-caption-font", fontSelectEl.value);
+    persistAppearance();
   });
 
   // Delegated click handler for the nearby-lines list: clicking any
@@ -325,6 +392,11 @@
       isPlaying = false;
       lastRenderedAnchorIdx = null;
       updatePlayPauseLabel();
+
+      // Persist so this survives page reloads / new tabs, until the
+      // user loads a different file.
+      storageSet("srtPlayerLastSrt", { fileName: file.name, subtitles: cues });
+      storageSet("srtPlayerElapsedMs", 0);
     } catch (err) {
       cueStatusEl.textContent = `読み込みエラー: ${err.message}`;
       console.error("[SRT Player] file read/parse error:", err);
@@ -395,6 +467,46 @@
       lineListEl.appendChild(row);
     }
   }
+
+  // ---------------------------------------------------------------
+  // Restore persisted state on load
+  // ---------------------------------------------------------------
+
+  async function restorePersistedState() {
+    const appearance = await storageGet("srtPlayerAppearance");
+    if (appearance) {
+      if (appearance.color) {
+        colorInputEl.value = appearance.color;
+        overlayEl.style.setProperty("--srt-caption-color", appearance.color);
+      }
+      if (appearance.size) {
+        sizeInputEl.value = appearance.size;
+        overlayEl.style.setProperty("--srt-caption-size", `${appearance.size}px`);
+      }
+      if (appearance.font) {
+        fontSelectEl.value = appearance.font;
+        overlayEl.style.setProperty("--srt-caption-font", appearance.font);
+      }
+    }
+
+    const lastSrt = await storageGet("srtPlayerLastSrt");
+    if (lastSrt && Array.isArray(lastSrt.subtitles) && lastSrt.subtitles.length > 0) {
+      subtitles = lastSrt.subtitles;
+      currentFileName = lastSrt.fileName || null;
+      filenameLabelEl.textContent = currentFileName || "(記憶されたファイル)";
+
+      const restoredElapsed = await storageGet("srtPlayerElapsedMs");
+      if (typeof restoredElapsed === "number" && restoredElapsed > 0) {
+        elapsedBaseMs = restoredElapsed;
+        cueStatusEl.textContent = `${subtitles.length} 件の字幕を読み込みました(前回の記憶、${formatMs(restoredElapsed)} から再開可能)。`;
+      } else {
+        cueStatusEl.textContent = `${subtitles.length} 件の字幕を読み込みました(前回の記憶)。`;
+      }
+      // isPlaying stays false - the user presses 再生 to actually
+      // resume, rather than the timer silently starting on its own.
+    }
+  }
+  restorePersistedState();
 
   // ---------------------------------------------------------------
   // Render loop

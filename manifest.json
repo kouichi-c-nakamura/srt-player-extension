@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "SRT Player (Independent Timer)",
-  "version": "0.1.0",
-  "description": "Step 1: Load and parse an SRT file, verify output before building the overlay/timer UI.",
+  "version": "0.2.0",
+  "description": "Floating SRT subtitle overlay with an independent, manually-synced timer. Works the same on any site since it never touches the page's video element.",
   "action": {},
-  "permissions": [],
+  "permissions": ["storage"],
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
@@ -12,5 +12,11 @@
       "css": ["overlay.css"],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "srt-player@example-local-dev.invalid",
+      "strict_min_version": "109.0"
+    }
+  }
 }
