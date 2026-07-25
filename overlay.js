@@ -231,13 +231,14 @@
 
   const panelEl = document.createElement("div");
   panelEl.id = "srt-player-panel";
+  panelEl.classList.add("collapsed");
   panelEl.innerHTML = `
     <div class="panel-header">
       <span>SRT Player</span>
       <div class="header-icons">
         <button type="button" class="icon-btn" data-action="toggle-list" data-role="toggle-list-btn" title="近くの行を表示">☰</button>
         <button type="button" class="icon-btn" data-action="toggle-settings" data-role="toggle-settings-btn" title="字幕の見た目設定">🎨</button>
-        <button type="button" class="icon-btn" data-action="toggle-collapse" title="最小化/展開">▾</button>
+        <button type="button" class="icon-btn" data-action="toggle-collapse" title="最小化/展開">▸</button>
       </div>
     </div>
     <div class="panel-body">
