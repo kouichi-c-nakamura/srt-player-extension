@@ -1,6 +1,100 @@
-/* Step 2: static overlay styling check.
-   No timer logic here yet - just proving the overlay renders
-   correctly on top of arbitrary pages/videos. */
+/* Step 3: adds the floating control panel alongside the subtitle
+   overlay from Step 2. Two independent elements:
+     #srt-player-overlay -> subtitle text only, pointer-events: none
+     #srt-player-panel   -> interactive controls, pointer-events: auto
+*/
+
+#srt-player-panel {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 2147483647;
+
+  width: 360px;
+  background: rgba(30, 30, 30, 0.92);
+  color: #eee;
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+#srt-player-panel * {
+  box-sizing: border-box;
+}
+
+#srt-player-panel .panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.3);
+  cursor: default;
+  font-weight: 600;
+  user-select: none;
+}
+
+#srt-player-panel .panel-header button {
+  background: none;
+  border: none;
+  color: #eee;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+}
+
+#srt-player-panel .panel-body {
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#srt-player-panel.collapsed .panel-body {
+  display: none;
+}
+
+#srt-player-panel .panel-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+#srt-player-panel button.ctrl-btn {
+  background: #444;
+  color: #eee;
+  border: 1px solid #666;
+  border-radius: 4px;
+  padding: 4px 6px;
+  cursor: pointer;
+  font-size: 11px;
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+#srt-player-panel button.ctrl-btn:hover {
+  background: #555;
+}
+
+#srt-player-panel button.ctrl-btn:active {
+  background: #333;
+}
+
+#srt-player-panel .filename {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  color: #ccc;
+}
+
+#srt-player-panel .status-line {
+  color: #aaa;
+  font-size: 11px;
+}
 
 #srt-player-overlay {
   position: fixed;
