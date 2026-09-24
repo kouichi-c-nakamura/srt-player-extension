@@ -61,6 +61,25 @@
   }
 
   // ---------------------------------------------------------------
+  // HTML formatting helper (supports <i> and <b> tags safely)
+  // ---------------------------------------------------------------
+
+  function renderFormattedSubtitle(containerEl, rawText) {
+    let safe = rawText
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    safe = safe
+      .replace(/&lt;i&gt;/gi, "<i>")
+      .replace(/&lt;\/i&gt;/gi, "</i>")
+      .replace(/&lt;b&gt;/gi, "<b>")
+      .replace(/&lt;\/b&gt;/gi, "</b>");
+
+    containerEl.innerHTML = safe;
+  }
+
+  // ---------------------------------------------------------------
   // Whitelist gate: do nothing at all on this page unless its
   // hostname is on the allowed list (or "enable everywhere" is on).
   // This keeps the extension's core simplicity (no per-site code)
@@ -84,7 +103,9 @@
   let subtitles = []; // sorted array of {index, start, end, text}
   let currentFileName = null;
   let isListExpanded = false;
-  let lastRenderedAnchorIdx = null; // sentinel; forces a render the first time
+  let currentActiveIdx = -1;
+  let isUserScrolling = false;
+  let userScrollTimeout = null;
 
   // Independent timer state. "elapsed" = current position on the
   // subtitle timeline, in milliseconds. This IS the only clock.
@@ -142,11 +163,8 @@
     return subtitles.findIndex((c) => timeMs >= c.start && timeMs <= c.end);
   }
 
-  // Index used as the "center" (offset 0) row for the nearby-lines
-  // list, and as the pivot for previous-cue jumps while in a gap.
-  // If we're inside a cue, that cue is the anchor. If we're in a
-  // gap between cues, the anchor is the most recent cue that
-  // already started (so the list still makes sense mid-gap).
+  // Index used as the "center" row for the nearby-lines list, and as
+  // the pivot for previous-cue jumps while in a gap.
   function getAnchorIndex(timeMs) {
     const idx = getCurrentCueIndex(timeMs);
     if (idx !== -1) return idx;
@@ -168,11 +186,8 @@
 
     let target;
     if (idx !== -1) {
-      // Currently inside a cue -> always advance to the next one,
-      // regardless of how far into the current cue we are.
       target = subtitles[idx + 1];
     } else {
-      // In a gap between cues -> the next upcoming cue.
       target = subtitles.find((c) => c.start > t);
     }
 
@@ -185,23 +200,16 @@
 
     let target = null;
     if (idx > 0) {
-      // Currently inside a cue -> always go to the true previous
-      // one, never just back to this same cue's own start.
       target = subtitles[idx - 1];
     } else if (idx === -1) {
-      // In a gap between cues -> the most recent cue before now.
       const candidates = subtitles.filter((c) => c.start < t);
       target = candidates[candidates.length - 1] || null;
     }
-    // idx === 0 (already on the first cue): nothing earlier to jump to.
 
     setElapsedMs(target ? target.start : 0);
   }
 
   function findCueAt(timeMs) {
-    // Linear scan is fine for typical subtitle counts (hundreds to
-    // low thousands of cues); revisit with binary search only if
-    // profiling shows it matters.
     return subtitles.find((c) => timeMs >= c.start && timeMs <= c.end) || null;
   }
 
@@ -225,9 +233,6 @@
   // ---------------------------------------------------------------
   // Control panel (UI)
   // ---------------------------------------------------------------
-  // Header icons (☰ nearby-lines, 🎨 appearance, ▾ collapse) toggle
-  // sections in the body. Icons keep the header compact instead of
-  // spending a full row on each toggle.
 
   const panelEl = document.createElement("div");
   panelEl.id = "srt-player-panel";
@@ -300,6 +305,75 @@
   const fontSelectEl = panelEl.querySelector('[data-role="font-select"]');
 
   // ---------------------------------------------------------------
+  // Scroll & List helpers
+  // ---------------------------------------------------------------
+
+  function markUserScrolling() {
+    isUserScrolling = true;
+    clearTimeout(userScrollTimeout);
+    userScrollTimeout = setTimeout(() => {
+      isUserScrolling = false;
+    }, 2500);
+  }
+
+  lineListEl.addEventListener("wheel", markUserScrolling, { passive: true });
+  lineListEl.addEventListener("touchstart", markUserScrolling, { passive: true });
+  lineListEl.addEventListener("scroll", markUserScrolling, { passive: true });
+
+  function populateFullLineList() {
+    lineListEl.innerHTML = "";
+    const fragment = document.createDocumentFragment();
+
+    subtitles.forEach((cue) => {
+      const row = document.createElement("div");
+      row.className = "line-row";
+      row.dataset.start = String(cue.start);
+
+      const timeEl = document.createElement("span");
+      timeEl.className = "line-time";
+      timeEl.textContent = formatMs(cue.start);
+      row.appendChild(timeEl);
+
+      const textEl = document.createElement("span");
+      textEl.className = "line-text";
+      renderFormattedSubtitle(textEl, cue.text.replace(/\n/g, " / "));
+      row.appendChild(textEl);
+
+      fragment.appendChild(row);
+    });
+
+    lineListEl.appendChild(fragment);
+    currentActiveIdx = -1;
+  }
+
+  function updateLineListActiveRow(forceCenter = false) {
+    if (!isListExpanded || subtitles.length === 0) return;
+
+    const t = getElapsedMs();
+    const anchorIdx = getAnchorIndex(t);
+
+    if (anchorIdx === currentActiveIdx && !forceCenter) return;
+
+    if (currentActiveIdx >= 0 && currentActiveIdx < lineListEl.children.length) {
+      lineListEl.children[currentActiveIdx].classList.remove("current");
+    }
+
+    currentActiveIdx = anchorIdx;
+
+    if (currentActiveIdx >= 0 && currentActiveIdx < lineListEl.children.length) {
+      const activeRow = lineListEl.children[currentActiveIdx];
+      activeRow.classList.add("current");
+
+      if (!isUserScrolling || forceCenter) {
+        activeRow.scrollIntoView({
+          behavior: forceCenter ? "auto" : "smooth",
+          block: "center",
+        });
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------
   // Wiring
   // ---------------------------------------------------------------
 
@@ -343,8 +417,10 @@
         isListExpanded = !isListExpanded;
         lineListEl.style.display = isListExpanded ? "flex" : "none";
         toggleListBtnEl.classList.toggle("active", isListExpanded);
-        lastRenderedAnchorIdx = null; // force a fresh render on open
-        renderLineList();
+        if (isListExpanded) {
+          isUserScrolling = false;
+          updateLineListActiveRow(true);
+        }
         break;
 
       case "toggle-settings": {
@@ -357,9 +433,6 @@
     }
   });
 
-  // Live-apply appearance settings via CSS custom properties on the
-  // overlay element. "input" (not "change") so it updates as the
-  // user drags/picks, not just on blur/commit.
   const persistAppearance = debounce(() => {
     storageSet("srtPlayerAppearance", {
       color: colorInputEl.value,
@@ -383,12 +456,12 @@
     persistAppearance();
   });
 
-  // Delegated click handler for the nearby-lines list: clicking any
-  // row with a data-start attribute jumps the internal timer there.
   lineListEl.addEventListener("click", (event) => {
     const row = event.target.closest(".line-row[data-start]");
     if (!row) return;
     setElapsedMs(parseFloat(row.dataset.start));
+    isUserScrolling = false;
+    updateLineListActiveRow(true);
   });
 
   fileInputEl.addEventListener("change", async (event) => {
@@ -409,15 +482,12 @@
       filenameLabelEl.textContent = file.name;
       cueStatusEl.textContent = `${cues.length} 件の字幕を読み込みました。`;
 
-      // Loading a new file resets the timeline, per "internal memory
-      // until next time you load a new file" - this IS that reset.
+      populateFullLineList();
+
       elapsedBaseMs = 0;
       isPlaying = false;
-      lastRenderedAnchorIdx = null;
       updatePlayPauseLabel();
 
-      // Persist so this survives page reloads / new tabs, until the
-      // user loads a different file.
       storageSet("srtPlayerLastSrt", { fileName: file.name, subtitles: cues });
       storageSet("srtPlayerElapsedMs", 0);
     } catch (err) {
@@ -440,57 +510,6 @@
     return `${pad(h)}:${pad(m)}:${pad(s)},${pad(msRemainder, 3)}`;
   }
 
-  function renderLineList() {
-    if (!isListExpanded) return;
-
-    const t = getElapsedMs();
-    const anchorIdx = getAnchorIndex(t);
-
-    // Skip the rebuild entirely if we're still centered on the same
-    // cue as last time. Rebuilding on every animation frame (60/sec)
-    // was destroying and recreating the row elements constantly,
-    // which could swallow a click that started (mousedown) on a row
-    // that got replaced before mouseup/click fired.
-    if (anchorIdx === lastRenderedAnchorIdx) return;
-    lastRenderedAnchorIdx = anchorIdx;
-
-    lineListEl.innerHTML = "";
-
-    for (let offset = -3; offset <= 3; offset++) {
-      const idx = anchorIdx + offset;
-      const row = document.createElement("div");
-      row.className = "line-row" + (offset === 0 ? " current" : "");
-
-      const offsetLabelEl = document.createElement("span");
-      offsetLabelEl.className = "offset-label";
-      offsetLabelEl.textContent = offset === 0 ? "現在" : offset > 0 ? `+${offset}` : `${offset}`;
-      row.appendChild(offsetLabelEl);
-
-      if (idx >= 0 && idx < subtitles.length) {
-        const cue = subtitles[idx];
-        row.dataset.start = String(cue.start);
-
-        const timeEl = document.createElement("span");
-        timeEl.className = "line-time";
-        timeEl.textContent = formatMs(cue.start);
-        row.appendChild(timeEl);
-
-        const textEl = document.createElement("span");
-        textEl.className = "line-text";
-        textEl.textContent = cue.text.replace(/\n/g, " / ");
-        row.appendChild(textEl);
-      } else {
-        row.classList.add("empty");
-        const textEl = document.createElement("span");
-        textEl.className = "line-text";
-        textEl.textContent = "\u2014"; // em dash placeholder, out of range
-        row.appendChild(textEl);
-      }
-
-      lineListEl.appendChild(row);
-    }
-  }
-
   // ---------------------------------------------------------------
   // Restore persisted state on load
   // ---------------------------------------------------------------
@@ -504,7 +523,7 @@
       }
       if (appearance.size) {
         sizeInputEl.value = appearance.size;
-        overlayEl.style.setProperty("--srt-caption-size", `${appearance.size}px`);
+        overlayEl.style.setProperty("--srt-caption-size", `${sizeInputEl.value}px`);
       }
       if (appearance.font) {
         fontSelectEl.value = appearance.font;
@@ -518,6 +537,8 @@
       currentFileName = lastSrt.fileName || null;
       filenameLabelEl.textContent = currentFileName || "(記憶されたファイル)";
 
+      populateFullLineList();
+
       const restoredElapsed = await storageGet("srtPlayerElapsedMs");
       if (typeof restoredElapsed === "number" && restoredElapsed > 0) {
         elapsedBaseMs = restoredElapsed;
@@ -525,8 +546,6 @@
       } else {
         cueStatusEl.textContent = `${subtitles.length} 件の字幕を読み込みました(前回の記憶)。`;
       }
-      // isPlaying stays false - the user presses 再生 to actually
-      // resume, rather than the timer silently starting on its own.
     }
   }
   restorePersistedState();
@@ -535,9 +554,6 @@
   // Render loop
   // ---------------------------------------------------------------
 
-  // If left playing well past the last subtitle line (e.g. the user
-  // forgot to stop it), auto-pause rather than let the timer run
-  // forever in the background.
   const AUTO_STOP_AFTER_LAST_CUE_MS = 60 * 1000; // 1 minute
 
   function renderLoop() {
@@ -545,7 +561,11 @@
     elapsedLabelEl.textContent = formatMs(t);
 
     const cue = findCueAt(t);
-    overlayEl.textContent = cue ? cue.text : "";
+    if (cue) {
+      renderFormattedSubtitle(overlayEl, cue.text);
+    } else {
+      overlayEl.innerHTML = "";
+    }
 
     if (isPlaying && subtitles.length > 0) {
       const lastCueEnd = subtitles[subtitles.length - 1].end;
@@ -556,7 +576,7 @@
       }
     }
 
-    renderLineList();
+    updateLineListActiveRow();
 
     requestAnimationFrame(renderLoop);
   }

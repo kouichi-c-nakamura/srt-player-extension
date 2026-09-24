@@ -127,6 +127,21 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+#srt-player-panel .line-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+#srt-player-panel .line-list::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 3px;
+}
+
+#srt-player-panel .line-list::-webkit-scrollbar-thumb:hover {
+  background: #777;
 }
 
 #srt-player-panel .line-row {
@@ -148,25 +163,6 @@
   font-weight: 600;
 }
 
-#srt-player-panel .line-row.empty {
-  color: #666;
-  cursor: default;
-}
-
-#srt-player-panel .line-row.empty:hover {
-  background: none;
-}
-
-#srt-player-panel .line-row .offset-label {
-  flex: 0 0 28px;
-  color: #999;
-  text-align: right;
-}
-
-#srt-player-panel .line-row.current .offset-label {
-  color: #ffd250;
-}
-
 #srt-player-panel .line-row .line-time {
   flex: 0 0 82px;
   color: #999;
@@ -177,6 +173,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+#srt-player-overlay i,
+#srt-player-panel .line-text i {
+  font-style: italic;
+}
+
+#srt-player-overlay b,
+#srt-player-panel .line-text b {
+  font-weight: bold;
 }
 
 #srt-player-panel .settings-label {
