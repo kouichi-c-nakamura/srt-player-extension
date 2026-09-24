@@ -11,12 +11,14 @@
   z-index: 2147483647;
 
   width: 360px;
-  background: rgba(30, 30, 30, 0.92);
+  background: rgba(24, 28, 32, 0.94);
   color: #eee;
   font-family: system-ui, sans-serif;
   font-size: 12px;
   border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(43, 162, 189, 0.45);
+  border-top: 3px solid #2BA2BD;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 10px rgba(43, 162, 189, 0.25);
   overflow: hidden;
 
   /* Smooth fade-in and fade-out */
@@ -38,9 +40,10 @@
   align-items: center;
   justify-content: space-between;
   padding: 6px 10px;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(43, 162, 189, 0.18);
   cursor: default;
   font-weight: 600;
+  color: #58c7df;
   user-select: none;
 }
 
@@ -75,7 +78,8 @@
 }
 
 #srt-player-panel .icon-btn.active {
-  background: rgba(255, 210, 80, 0.25);
+  background: rgba(43, 162, 189, 0.35);
+  color: #58c7df;
 }
 
 #srt-player-panel .panel-body {
@@ -97,9 +101,9 @@
 }
 
 #srt-player-panel button.ctrl-btn {
-  background: #444;
+  background: #343c44;
   color: #eee;
-  border: 1px solid #666;
+  border: 1px solid #4a5763;
   border-radius: 4px;
   padding: 4px 6px;
   cursor: pointer;
@@ -110,11 +114,12 @@
 }
 
 #srt-player-panel button.ctrl-btn:hover {
-  background: #555;
+  background: #414b55;
+  border-color: #2BA2BD;
 }
 
 #srt-player-panel button.ctrl-btn:active {
-  background: #333;
+  background: #252b31;
 }
 
 #srt-player-panel .filename {
@@ -131,7 +136,7 @@
 }
 
 #srt-player-panel .line-list {
-  border-top: 1px solid #444;
+  border-top: 1px solid rgba(43, 162, 189, 0.3);
   padding-top: 6px;
   display: flex;
   flex-direction: column;
@@ -145,12 +150,12 @@
 }
 
 #srt-player-panel .line-list::-webkit-scrollbar-thumb {
-  background: #555;
+  background: rgba(43, 162, 189, 0.4);
   border-radius: 3px;
 }
 
 #srt-player-panel .line-list::-webkit-scrollbar-thumb:hover {
-  background: #777;
+  background: rgba(43, 162, 189, 0.7);
 }
 
 #srt-player-panel .line-row {
@@ -168,13 +173,19 @@
 }
 
 #srt-player-panel .line-row.current {
-  background: rgba(255, 210, 80, 0.18);
+  background: rgba(43, 162, 189, 0.28);
+  border-left: 2px solid #2BA2BD;
   font-weight: 600;
+  color: #fff;
 }
 
 #srt-player-panel .line-row .line-time {
   flex: 0 0 82px;
   color: #999;
+}
+
+#srt-player-panel .line-row.current .line-time {
+  color: #58c7df;
 }
 
 #srt-player-panel .line-row .line-text {

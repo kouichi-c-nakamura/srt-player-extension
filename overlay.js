@@ -321,7 +321,6 @@
   function resetAutoHideTimer() {
     clearTimeout(autoHideTimer);
     autoHideTimer = setTimeout(() => {
-      // Do not hide if the cursor is directly on top of the panel or actively scrolling
       if (!isPanelHovered && !isUserScrolling) {
         panelEl.classList.add("idle");
       }
