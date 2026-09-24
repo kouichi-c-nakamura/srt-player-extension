@@ -107,6 +107,11 @@
   let isUserScrolling = false;
   let userScrollTimeout = null;
 
+  // Auto-hide control panel state
+  const AUTO_HIDE_DELAY_MS = 3000;
+  let autoHideTimer = null;
+  let isPanelHovered = false;
+
   // Independent timer state. "elapsed" = current position on the
   // subtitle timeline, in milliseconds. This IS the only clock.
   let elapsedBaseMs = 0; // elapsed value as of the last play()/setElapsed()
@@ -305,14 +310,51 @@
   const fontSelectEl = panelEl.querySelector('[data-role="font-select"]');
 
   // ---------------------------------------------------------------
+  // Auto-hide Panel on Inactivity
+  // ---------------------------------------------------------------
+
+  function showPanel() {
+    panelEl.classList.remove("idle");
+    resetAutoHideTimer();
+  }
+
+  function resetAutoHideTimer() {
+    clearTimeout(autoHideTimer);
+    autoHideTimer = setTimeout(() => {
+      // Do not hide if the cursor is directly on top of the panel or actively scrolling
+      if (!isPanelHovered && !isUserScrolling) {
+        panelEl.classList.add("idle");
+      }
+    }, AUTO_HIDE_DELAY_MS);
+  }
+
+  panelEl.addEventListener("mouseenter", () => {
+    isPanelHovered = true;
+    showPanel();
+  });
+
+  panelEl.addEventListener("mouseleave", () => {
+    isPanelHovered = false;
+    resetAutoHideTimer();
+  });
+
+  window.addEventListener("mousemove", showPanel, { passive: true });
+  window.addEventListener("pointerdown", showPanel, { passive: true });
+  window.addEventListener("keydown", showPanel, { passive: true });
+
+  resetAutoHideTimer();
+
+  // ---------------------------------------------------------------
   // Scroll & List helpers
   // ---------------------------------------------------------------
 
   function markUserScrolling() {
     isUserScrolling = true;
+    showPanel();
     clearTimeout(userScrollTimeout);
     userScrollTimeout = setTimeout(() => {
       isUserScrolling = false;
+      resetAutoHideTimer();
     }, 2500);
   }
 
@@ -378,6 +420,8 @@
   // ---------------------------------------------------------------
 
   panelEl.addEventListener("click", (event) => {
+    showPanel();
+
     const btn = event.target.closest("button[data-action]");
     if (!btn) return;
     const action = btn.dataset.action;
