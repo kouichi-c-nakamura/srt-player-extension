@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "Manual Sync SRT Subtitles Player",
   "version": "0.3.0",
-  "description": "Floating SRT subtitle overlay with an independent, manually-synced timer. Only activates on whitelisted sites (configurable via the toolbar icon).",
-  "icons": {
+"description": "Floating SRT subtitle overlay with an independent, manually-synced timer. Works on whitelisted streaming sites.",
+    "icons": {
     "16": "SRT_128.png",
     "48": "SRT_128.png",
     "128": "SRT_128.png"
