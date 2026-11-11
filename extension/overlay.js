@@ -244,7 +244,7 @@
   panelEl.classList.add("collapsed");
   panelEl.innerHTML = `
     <div class="panel-header">
-      <span>SRT Player</span>
+      <span>Manual Sync SRT</span>
       <div class="header-icons">
         <button type="button" class="icon-btn" data-action="toggle-list" data-role="toggle-list-btn" title="近くの行を表示">☰</button>
         <button type="button" class="icon-btn" data-action="toggle-settings" data-role="toggle-settings-btn" title="字幕の見た目設定">🎨</button>

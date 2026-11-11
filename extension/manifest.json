@@ -1,10 +1,20 @@
 {
   "manifest_version": 3,
-  "name": "SRT Player (Independent Timer)",
+  "name": "Manual Sync SRT Subtitles Player",
   "version": "0.3.0",
   "description": "Floating SRT subtitle overlay with an independent, manually-synced timer. Only activates on whitelisted sites (configurable via the toolbar icon).",
+  "icons": {
+    "16": "SRT_128.png",
+    "48": "SRT_128.png",
+    "128": "SRT_128.png"
+  },
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "SRT_128.png",
+      "48": "SRT_128.png",
+      "128": "SRT_128.png"
+    }
   },
   "permissions": ["storage", "activeTab"],
   "content_scripts": [
