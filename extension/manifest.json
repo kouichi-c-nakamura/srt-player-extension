@@ -4,17 +4,17 @@
   "version": "0.3.1",
 "description": "Floating SRT subtitle overlay with an independent, manually-synced timer. Works on whitelisted streaming sites.",
     "icons": {
-    "16": "SRT_128.png",
-    "48": "SRT_128.png",
+    "16": "SRT_16.png",
+    "48": "SRT_48.png",
     "128": "SRT_128.png"
   },
   "action": {
-    "default_popup": "popup.html",
     "default_icon": {
-      "16": "SRT_128.png",
-      "48": "SRT_128.png",
+      "16": "SRT_16.png",
+      "48": "SRT_48.png",
       "128": "SRT_128.png"
-    }
+    },
+    "default_popup": "popup.html"
   },
   "permissions": ["storage", "activeTab"],
   "content_scripts": [
