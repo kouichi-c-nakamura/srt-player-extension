@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Manual Sync SRT Subtitles Player",
-  "version": "0.3.0",
+  "version": "0.3.1",
 "description": "Floating SRT subtitle overlay with an independent, manually-synced timer. Works on whitelisted streaming sites.",
     "icons": {
     "16": "SRT_128.png",
@@ -25,10 +25,11 @@
       "run_at": "document_idle"
     }
   ],
-  "browser_specific_settings": {
+"browser_specific_settings": {
     "gecko": {
-      "id": "srt-player@example-local-dev.invalid",
-      "strict_min_version": "109.0"
+      "id": "manual-sync-srt@nakamura-lab",
+      "strict_min_version": "109.0",
+      "data_collection_permissions": false
     }
   }
 }
